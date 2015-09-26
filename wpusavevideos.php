@@ -4,7 +4,7 @@
 Plugin Name: WPU Save Videos
 Plugin URI: http://github.com/Darklg/WPUtilities
 Description: Save Videos thumbnails.
-Version: 0.3
+Version: 0.4
 Author: Darklg
 Author URI: http://darklg.me/
 License: MIT License
@@ -116,16 +116,16 @@ class WPUSaveVideos {
 
     function retrieve_thumbnail($video_url, $post_id) {
 
-        $thumbnail_url = $this->retrieve_thumbnail_url($video_url);
+        $thumbnail_details = $this->retrieve_thumbnail_details($video_url);
 
-        if (!empty($thumbnail_url)) {
-            return $this->media_sideload_image($thumbnail_url, $post_id);
+        if (is_array($thumbnail_details)) {
+            return $this->media_sideload_image($thumbnail_details['url'], $post_id, $thumbnail_details['title']);
         }
 
         return false;
     }
 
-    function retrieve_thumbnail_url($video_url) {
+    function retrieve_thumbnail_details($video_url) {
 
         $url_parsed = parse_url($video_url);
 
@@ -137,13 +137,28 @@ class WPUSaveVideos {
         if (in_array($url_parsed['host'], $this->hosts['youtube']) && isset($url_parsed['query'])) {
             parse_str($url_parsed['query'], $query);
             if (isset($query['v'])) {
-                return 'http://img.youtube.com/vi/' . $query['v'] . '/0.jpg';
+
+                // Weird API
+                $youtube_response = file_get_contents('http://www.youtube.com/get_video_info?video_id=' . $query['v']);
+                parse_str($youtube_response, $youtube_details);
+                if (is_array($youtube_details) && isset($youtube_details['title'], $youtube_details['iurlhq'])) {
+                    return array(
+                        'url' => $youtube_details['iurlhq'],
+                        'title' => $youtube_details['title']
+                    );
+                }
+
+                // Default API
+                return array(
+                    'url' => 'http://img.youtube.com/vi/' . $query['v'] . '/0.jpg',
+                    'title' => $query['v']
+                );
             }
         }
 
         // Extract for vimeo
         if (in_array($url_parsed['host'], $this->hosts['vimeo'])) {
-            $vimeo_url = explode('/', $video_url);
+            $vimeo_url = explode('/', $url_parsed['path']);
             $vimeo_id = false;
             foreach ($vimeo_url as $url_part) {
                 if (is_numeric($url_part)) {
@@ -158,22 +173,28 @@ class WPUSaveVideos {
             }
 
             if (isset($vimeo_details[0], $vimeo_details[0]->thumbnail_large)) {
-                return $vimeo_details[0]->thumbnail_large;
+                return array(
+                    'url' => $vimeo_details[0]->thumbnail_large,
+                    'title' => $vimeo_details[0]->title
+                );
             }
         }
 
         // Extract for dailymotion
         if (in_array($url_parsed['host'], $this->hosts['dailymotion'])) {
-            $daily_id = strtok(basename($video_url) , '_');
+            $daily_id = strtok(basename($url_parsed['path']) , '_');
             $daily_details = array();
 
             if (!empty($daily_id)) {
-                $daily_response = wp_remote_get("https://api.dailymotion.com/video/" . $daily_id . "?fields=thumbnail_720_url");
+                $daily_response = wp_remote_get("https://api.dailymotion.com/video/" . $daily_id . "?fields=thumbnail_720_url,title");
                 $daily_details = json_decode(wp_remote_retrieve_body($daily_response));
             }
 
             if (is_object($daily_details) && isset($daily_details->thumbnail_720_url)) {
-                return $daily_details->thumbnail_720_url;
+                return array(
+                    'url' => $daily_details->thumbnail_720_url,
+                    'title' => $daily_details->title
+                );
             }
         }
 
