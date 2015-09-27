@@ -4,7 +4,7 @@
 Plugin Name: WPU Save Videos
 Plugin URI: http://github.com/Darklg/WPUtilities
 Description: Save Videos thumbnails.
-Version: 0.4
+Version: 0.5
 Author: Darklg
 Author URI: http://darklg.me/
 License: MIT License
@@ -15,6 +15,7 @@ class WPUSaveVideos {
 
     private $hosts = array(
         'youtube' => array(
+            'youtu.be',
             'youtube.com',
             'www.youtube.com'
         ) ,
@@ -134,12 +135,12 @@ class WPUSaveVideos {
         }
 
         // Extract for youtube
-        if (in_array($url_parsed['host'], $this->hosts['youtube']) && isset($url_parsed['query'])) {
-            parse_str($url_parsed['query'], $query);
-            if (isset($query['v'])) {
+        if (in_array($url_parsed['host'], $this->hosts['youtube'])) {
+            $youtube_id = $this->parse_yturl($video_url);
+            if ($youtube_id !== false) {
 
                 // Weird API
-                $youtube_response = file_get_contents('http://www.youtube.com/get_video_info?video_id=' . $query['v']);
+                $youtube_response = file_get_contents('http://www.youtube.com/get_video_info?video_id=' . $youtube_id);
                 parse_str($youtube_response, $youtube_details);
                 if (is_array($youtube_details) && isset($youtube_details['title'], $youtube_details['iurlhq'])) {
                     return array(
@@ -150,8 +151,8 @@ class WPUSaveVideos {
 
                 // Default API
                 return array(
-                    'url' => 'http://img.youtube.com/vi/' . $query['v'] . '/0.jpg',
-                    'title' => $query['v']
+                    'url' => 'http://img.youtube.com/vi/' . $youtube_id . '/0.jpg',
+                    'title' => $youtube_id
                 );
             }
         }
@@ -199,6 +200,19 @@ class WPUSaveVideos {
         }
 
         return '';
+    }
+
+    /**
+     *  Check if input string is a valid YouTube URL
+     *  and try to extract the YouTube Video ID from it.
+     *  @author  Stephan Schmitz <eyecatchup@gmail.com>
+     *  @param   $url   string   The string that shall be checked.
+     *  @return  mixed           Returns YouTube Video ID, or (boolean) false.
+     */
+    function parse_yturl($url) {
+        $pattern = '#^(?:https?://|//)?(?:www\.|m\.)?(?:youtu\.be/|youtube\.com/(?:embed/|v/|watch\?v=|watch\?.+&v=))([\w-]{11})(?![\w-])#';
+        preg_match($pattern, $url, $matches);
+        return (isset($matches[1])) ? $matches[1] : false;
     }
 
     function media_sideload_image($file, $post_id, $desc = '') {
