@@ -34,9 +34,17 @@ class SampleTest extends WP_UnitTestCase {
     }
 
     function test_parseyturl() {
-        $this->assertEquals('azazazazaza', $this->plugin->parse_yturl('https://www.youtube.com/watch?v=azazazazaza'));
-        $this->assertEquals('azazazazaza', $this->plugin->parse_yturl('https://www.youtube.com/embed/azazazazaza'));
-        $this->assertEquals('azazazazaza', $this->plugin->parse_yturl('https://youtu.be/azazazazaza'));
+
+        $videos = array(
+            'https://www.youtube.com/watch?v=azazazazaza&test',
+            'https://www.youtube.com/watch?v=azazazazaza',
+            'https://www.youtube.com/embed/azazazazaza',
+            'https://www.youtube.com/v/azazazazaza',
+            'https://youtu.be/azazazazaza',
+        );
+        foreach ($videos as $video) {
+            $this->assertEquals('azazazazaza', $this->plugin->parse_yturl($video));
+        }
     }
 }
 
