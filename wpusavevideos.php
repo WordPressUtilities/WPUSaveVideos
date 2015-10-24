@@ -4,7 +4,7 @@
 Plugin Name: WPU Save Videos
 Plugin URI: http://github.com/Darklg/WPUtilities
 Description: Save Videos thumbnails.
-Version: 0.5
+Version: 0.6
 Author: Darklg
 Author URI: http://darklg.me/
 License: MIT License
@@ -38,6 +38,14 @@ class WPUSaveVideos {
         add_action('save_post', array(&$this,
             'save_post'
         ) , 10, 3);
+        if (apply_filters('wpusavevideos_enable_oembed_player', false)) {
+            add_action('wp_enqueue_scripts', array(&$this,
+                'load_assets'
+            ));
+            add_filter('embed_oembed_html', array(&$this,
+                'embed_oembed_html'
+            ) , 99, 4);
+        }
     }
 
     function save_post($post_id, $post) {
@@ -245,6 +253,48 @@ class WPUSaveVideos {
         }
 
         return $id;
+    }
+
+    /* ----------------------------------------------------------
+      Oembed lite player
+    ---------------------------------------------------------- */
+
+    function load_assets() {
+        wp_enqueue_script('wpusavevideo_oembed_script', plugins_url('assets/script.js', __FILE__));
+        wp_register_style('wpusavevideo_oembed_style', plugins_url('assets/style.css', __FILE__));
+        wp_enqueue_style('wpusavevideo_oembed_style');
+    }
+
+    function embed_oembed_html($html, $url, $attr, $post_id) {
+        $wpusavevideos_videos = unserialize(get_post_meta($post_id, 'wpusavevideos_videos', 1));
+        foreach ($wpusavevideos_videos as $video_url) {
+            if ($video_url['url'] != $url) {
+                continue;
+            }
+            preg_match('/src="(.*)"/isU', $html, $matches);
+            if (!isset($matches[1])) {
+                continue;
+            }
+            $embed_url = $matches[1];
+            $image = wp_get_attachment_image_src($video_url['thumbnail'], 'full');
+            if (!isset($image[0])) {
+                continue;
+            }
+            $parse_url = parse_url($url);
+            if (in_array($parse_url['host'], $this->hosts['youtube'])) {
+                $embed_url.= '&autoplay=1';
+            }
+            if (in_array($parse_url['host'], $this->hosts['vimeo'])) {
+                $embed_url.= '?autoplay=1';
+            }
+            return '<div class="wpusv-embed-video" data-embed="' . $embed_url . '">'.
+            '<span class="cover" style="background-image:url(' . $image[0] . ');" >'.
+            '<button class="wpusv-embed-video-play"></button>'.
+            '</span>'.
+            '</div>';
+        }
+
+        return $html;
     }
 }
 
