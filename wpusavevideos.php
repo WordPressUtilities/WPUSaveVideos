@@ -4,7 +4,7 @@
 Plugin Name: WPU Save Videos
 Plugin URI: http://github.com/Darklg/WPUtilities
 Description: Save Videos thumbnails.
-Version: 0.6.1
+Version: 0.6.2
 Author: Darklg
 Author URI: http://darklg.me/
 License: MIT License
@@ -148,11 +148,16 @@ class WPUSaveVideos {
             if ($youtube_id !== false) {
 
                 // Weird API
-                $youtube_response = file_get_contents('http://www.youtube.com/get_video_info?video_id=' . $youtube_id);
-                parse_str($youtube_response, $youtube_details);
+                $youtube_response = wp_remote_get('http://www.youtube.com/get_video_info?video_id=' . $youtube_id);
+                parse_str(wp_remote_retrieve_body($youtube_response) , $youtube_details);
                 if (is_array($youtube_details) && isset($youtube_details['title'], $youtube_details['iurlhq'])) {
+                    $url_img = $youtube_details['iurlhq'];
+                    if (isset($youtube_details['iurlmaxres'])) {
+                        $url_img = $youtube_details['iurlmaxres'];
+                    }
+
                     return array(
-                        'url' => $youtube_details['iurlhq'],
+                        'url' => $url_img,
                         'title' => $youtube_details['title']
                     );
                 }
@@ -292,11 +297,7 @@ class WPUSaveVideos {
             if (in_array($parse_url['host'], $this->hosts['vimeo'])) {
                 $embed_url.= '?autoplay=1';
             }
-            return '<div class="wpusv-embed-video" data-embed="' . $embed_url . '">'.
-            '<span class="cover" style="background-image:url(' . $image[0] . ');" >'.
-            '<button class="wpusv-embed-video-play"></button>'.
-            '</span>'.
-            '</div>';
+            return '<div class="wpusv-embed-video" data-embed="' . $embed_url . '">' . '<span class="cover" style="background-image:url(' . $image[0] . ');" >' . '<button class="wpusv-embed-video-play"></button>' . '</span>' . '</div>';
         }
 
         return $html;
