@@ -4,7 +4,7 @@
 Plugin Name: WPU Save Videos
 Plugin URI: http://github.com/Darklg/WPUtilities
 Description: Save Videos thumbnails.
-Version: 0.6.2
+Version: 0.6.3
 Author: Darklg
 Author URI: http://darklg.me/
 License: MIT License
@@ -297,10 +297,19 @@ class WPUSaveVideos {
             if (in_array($parse_url['host'], $this->hosts['vimeo'])) {
                 $embed_url.= '?autoplay=1';
             }
+            if (in_array($parse_url['host'], $this->hosts['dailymotion'])) {
+                $embed_url.= '?autoplay=1';
+            }
             return '<div class="wpusv-embed-video" data-embed="' . $embed_url . '">' . '<span class="cover" style="background-image:url(' . $image[0] . ');" >' . '<button class="wpusv-embed-video-play"></button>' . '</span>' . '</div>';
         }
 
         return $html;
+    }
+
+    /* Uninstall */
+
+    function uninstall() {
+        delete_post_meta_by_key('wpusavevideos_videos');
     }
 }
 
