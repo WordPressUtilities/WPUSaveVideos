@@ -4,7 +4,7 @@
 Plugin Name: WPU Save Videos
 Plugin URI: http://github.com/Darklg/WPUtilities
 Description: Save Videos thumbnails.
-Version: 0.6.3
+Version: 0.7
 Author: Darklg
 Author URI: http://darklg.me/
 License: MIT License
@@ -128,7 +128,12 @@ class WPUSaveVideos {
         $thumbnail_details = $this->retrieve_thumbnail_details($video_url);
 
         if (is_array($thumbnail_details)) {
-            return $this->media_sideload_image($thumbnail_details['url'], $post_id, $thumbnail_details['title']);
+            $thumb_id = $this->media_sideload_image($thumbnail_details['url'], $post_id, $thumbnail_details['title']);
+            if ($thumbnail_details['width'] > 0 && $thumbnail_details['height'] > 0) {
+                $percent_ratio = 100 / ($thumbnail_details['width'] / $thumbnail_details['height']);
+                add_post_meta($thumb_id, 'wpusavevideos_ratio', $percent_ratio);
+            }
+            return $thumb_id;
         }
 
         return false;
@@ -156,16 +161,35 @@ class WPUSaveVideos {
                         $url_img = $youtube_details['iurlmaxres'];
                     }
 
+                    $width = 0;
+                    $height = 0;
+                    // Try to retrieve the video dimensions
+                    if (isset($youtube_details['fmt_list'])) {
+                        $fmt_list = explode('/', $youtube_details['fmt_list']);
+                        foreach ($fmt_list as $fmt_info) {
+                            $fmt_info_details = explode('x', $fmt_info);
+                            if (is_array($fmt_info_details) && isset($fmt_info_details[1])) {
+                                $width = $fmt_info_details[0];
+                                $height = $fmt_info_details[1];
+                                break;
+                            }
+                        }
+                    }
+
                     return array(
                         'url' => $url_img,
-                        'title' => $youtube_details['title']
+                        'title' => $youtube_details['title'],
+                        'width' => $width,
+                        'height' => $height
                     );
                 }
 
                 // Default API
                 return array(
                     'url' => 'http://img.youtube.com/vi/' . $youtube_id . '/0.jpg',
-                    'title' => $youtube_id
+                    'title' => $youtube_id,
+                    'width' => 0,
+                    'height' => 0
                 );
             }
         }
@@ -189,7 +213,9 @@ class WPUSaveVideos {
             if (isset($vimeo_details[0], $vimeo_details[0]->thumbnail_large)) {
                 return array(
                     'url' => $vimeo_details[0]->thumbnail_large,
-                    'title' => $vimeo_details[0]->title
+                    'title' => $vimeo_details[0]->title,
+                    'width' => $vimeo_details[0]->width,
+                    'height' => $vimeo_details[0]->height
                 );
             }
         }
@@ -200,14 +226,25 @@ class WPUSaveVideos {
             $daily_details = array();
 
             if (!empty($daily_id)) {
-                $daily_response = wp_remote_get("https://api.dailymotion.com/video/" . $daily_id . "?fields=thumbnail_720_url,title");
+                $daily_response = wp_remote_get("https://api.dailymotion.com/video/" . $daily_id . "?fields=thumbnail_720_url,title,aspect_ratio");
                 $daily_details = json_decode(wp_remote_retrieve_body($daily_response));
             }
 
             if (is_object($daily_details) && isset($daily_details->thumbnail_720_url)) {
+
+                $width = 0;
+                $height = 0;
+                // Try to retrieve the video dimensions through the aspect ratio
+                if (isset($daily_details->aspect_ratio)) {
+                    $height = 300;
+                    $width = intval(floor($height * $daily_details->aspect_ratio));
+                }
+
                 return array(
                     'url' => $daily_details->thumbnail_720_url,
-                    'title' => $daily_details->title
+                    'title' => $daily_details->title,
+                    'width' => $width,
+                    'height' => $height
                 );
             }
         }
@@ -300,7 +337,14 @@ class WPUSaveVideos {
             if (in_array($parse_url['host'], $this->hosts['dailymotion'])) {
                 $embed_url.= '?autoplay=1';
             }
-            return '<div class="wpusv-embed-video" data-embed="' . $embed_url . '">' . '<span class="cover" style="background-image:url(' . $image[0] . ');" >' . '<button class="wpusv-embed-video-play"></button>' . '</span>' . '</div>';
+            $style = '';
+            $ratio = get_post_meta($video_url['thumbnail'] , 'wpusavevideos_ratio', 1);
+            // Only common values ( more than 1 digit )
+            if (strlen($ratio) >= 2) {
+                $style = 'padding-top:' . $ratio . '%;';
+            }
+
+            return '<div class="wpusv-embed-video" data-embed="' . $embed_url . '" style="' . $style . '">' . '<span class="cover" style="background-image:url(' . $image[0] . ');" >' . '<button class="wpusv-embed-video-play"></button>' . '</span>' . '</div>';
         }
 
         return $html;

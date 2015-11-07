@@ -1,6 +1,7 @@
 # WPUSaveVideos
 
 Save video thumbnails from Youtube, Dailymotion & Vimeo.
+Add a lightweight responsive iframe loader with the video preview instead of the heavy oembed basic player.
 
 
 ## Enable custom oembed responsive player (beta).
