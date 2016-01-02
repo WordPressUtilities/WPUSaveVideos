@@ -4,7 +4,7 @@
 Plugin Name: WPU Save Videos
 Plugin URI: http://github.com/Darklg/WPUtilities
 Description: Save Videos thumbnails.
-Version: 0.7
+Version: 0.7.1
 Author: Darklg
 Author URI: http://darklg.me/
 License: MIT License
@@ -13,6 +13,7 @@ License URI: http://opensource.org/licenses/MIT
 
 class WPUSaveVideos {
 
+    private $plugin_version = '0.7.1';
     private $hosts = array(
         'youtube' => array(
             'youtu.be',
@@ -21,7 +22,8 @@ class WPUSaveVideos {
         ) ,
         'vimeo' => array(
             'vimeo.com',
-            'www.vimeo.com'
+            'www.vimeo.com',
+            'player.vimeo.com'
         ) ,
         'dailymotion' => array(
             'dailymotion.com',
@@ -163,6 +165,7 @@ class WPUSaveVideos {
 
                     $width = 0;
                     $height = 0;
+
                     // Try to retrieve the video dimensions
                     if (isset($youtube_details['fmt_list'])) {
                         $fmt_list = explode('/', $youtube_details['fmt_list']);
@@ -196,14 +199,7 @@ class WPUSaveVideos {
 
         // Extract for vimeo
         if (in_array($url_parsed['host'], $this->hosts['vimeo'])) {
-            $vimeo_url = explode('/', $url_parsed['path']);
-            $vimeo_id = false;
-            foreach ($vimeo_url as $url_part) {
-                if (is_numeric($url_part)) {
-                    $vimeo_id = $url_part;
-                }
-            }
-
+            $vimeo_id = $this->parse_vimeourl($video_url);
             $vimeo_details = array();
             if (is_numeric($vimeo_id)) {
                 $vimeo_response = wp_remote_get("http://vimeo.com/api/v2/video/" . $vimeo_id . ".json");
@@ -222,7 +218,7 @@ class WPUSaveVideos {
 
         // Extract for dailymotion
         if (in_array($url_parsed['host'], $this->hosts['dailymotion'])) {
-            $daily_id = strtok(basename($url_parsed['path']) , '_');
+            $daily_id = $this->parse_dailyurl($video_url);
             $daily_details = array();
 
             if (!empty($daily_id)) {
@@ -234,6 +230,7 @@ class WPUSaveVideos {
 
                 $width = 0;
                 $height = 0;
+
                 // Try to retrieve the video dimensions through the aspect ratio
                 if (isset($daily_details->aspect_ratio)) {
                     $height = 300;
@@ -263,6 +260,23 @@ class WPUSaveVideos {
         $pattern = '#^(?:https?://|//)?(?:www\.|m\.)?(?:youtu\.be/|youtube\.com/(?:embed/|v/|watch\?v=|watch\?.+&v=))([\w-]{11})(?![\w-])#';
         preg_match($pattern, $url, $matches);
         return (isset($matches[1])) ? $matches[1] : false;
+    }
+
+    function parse_dailyurl($url) {
+        $url_parsed = parse_url($url);
+        return strtok(basename($url_parsed['path']) , '_');
+    }
+
+    function parse_vimeourl($url) {
+        $url_parsed = parse_url($url);
+        $vimeo_url = explode('/', $url_parsed['path']);
+        $vimeo_id = false;
+        foreach ($vimeo_url as $url_part) {
+            if (is_numeric($url_part)) {
+                $vimeo_id = $url_part;
+            }
+        }
+        return $vimeo_id;
     }
 
     function media_sideload_image($file, $post_id, $desc = '') {
@@ -304,8 +318,8 @@ class WPUSaveVideos {
     function load_assets() {
         wp_enqueue_script('wpusavevideo_oembed_script', plugins_url('assets/script.js', __FILE__) , array(
             'jquery'
-        ));
-        wp_register_style('wpusavevideo_oembed_style', plugins_url('assets/style.css', __FILE__));
+        ) , $this->plugin_version);
+        wp_register_style('wpusavevideo_oembed_style', plugins_url('assets/style.css', __FILE__) , array() , $this->plugin_version);
         wp_enqueue_style('wpusavevideo_oembed_style');
     }
 
@@ -338,7 +352,8 @@ class WPUSaveVideos {
                 $embed_url.= '?autoplay=1';
             }
             $style = '';
-            $ratio = get_post_meta($video_url['thumbnail'] , 'wpusavevideos_ratio', 1);
+            $ratio = get_post_meta($video_url['thumbnail'], 'wpusavevideos_ratio', 1);
+
             // Only common values ( more than 1 digit )
             if (strlen($ratio) >= 2) {
                 $style = 'padding-top:' . $ratio . '%;';
