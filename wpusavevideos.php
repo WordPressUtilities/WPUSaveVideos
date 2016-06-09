@@ -4,7 +4,7 @@
 Plugin Name: WPU Save Videos
 Plugin URI: http://github.com/Darklg/WPUtilities
 Description: Save Videos thumbnails.
-Version: 0.7.1
+Version: 0.8
 Author: Darklg
 Author URI: http://darklg.me/
 License: MIT License
@@ -13,18 +13,18 @@ License URI: http://opensource.org/licenses/MIT
 
 class WPUSaveVideos {
 
-    private $plugin_version = '0.7.1';
+    private $plugin_version = '0.8';
     private $hosts = array(
         'youtube' => array(
             'youtu.be',
             'youtube.com',
             'www.youtube.com'
-        ) ,
+        ),
         'vimeo' => array(
             'vimeo.com',
             'www.vimeo.com',
             'player.vimeo.com'
-        ) ,
+        ),
         'dailymotion' => array(
             'dailymotion.com',
             'www.dailymotion.com'
@@ -36,21 +36,21 @@ class WPUSaveVideos {
         'attachment'
     );
 
-    function __construct() {
+    public function __construct() {
         add_action('save_post', array(&$this,
             'save_post'
-        ) , 10, 3);
+        ), 10, 3);
         if (apply_filters('wpusavevideos_enable_oembed_player', false)) {
             add_action('wp_enqueue_scripts', array(&$this,
                 'load_assets'
             ));
             add_filter('embed_oembed_html', array(&$this,
                 'embed_oembed_html'
-            ) , 99, 4);
+            ), 99, 4);
         }
     }
 
-    function save_post($post_id, $post) {
+    public function save_post($post_id, $post) {
         if (!is_object($post)) {
             return;
         }
@@ -81,6 +81,11 @@ class WPUSaveVideos {
         /* Add new videos  */
         $new_videos = $this->extract_videos_from_text($post->post_content);
 
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+
+        /* Extract video details */
         foreach ($new_videos as $id => $new_video) {
             if (!array_key_exists($id, $videos)) {
                 $new_video['thumbnail'] = $this->retrieve_thumbnail($new_video['url'], $post_id);
@@ -90,11 +95,29 @@ class WPUSaveVideos {
             }
         }
 
+        /* Remove inexistant videos */
+        $saved_videos = array();
+        foreach ($videos as $id => $video) {
+            if (array_key_exists($id, $new_videos)) {
+                $saved_videos[$id] = $video;
+            }
+        }
+
+        /* Set post thumbnail */
+        if (apply_filters('wpusavevideos_set_post_thumbnail', false) && !has_post_thumbnail($post_id)) {
+            foreach ($saved_videos as $video) {
+                if (isset($video['thumbnail']) && is_numeric($video['thumbnail'])) {
+                    set_post_thumbnail($post_id, $video['thumbnail']);
+                    break;
+                }
+            }
+        }
+
         /* Save video list */
-        update_post_meta($post_id, 'wpusavevideos_videos', serialize($videos));
+        update_post_meta($post_id, 'wpusavevideos_videos', serialize($saved_videos));
     }
 
-    function extract_videos_from_text($text) {
+    public function extract_videos_from_text($text) {
 
         $hosts = array();
         foreach ($this->hosts as $new_hosts) {
@@ -125,12 +148,13 @@ class WPUSaveVideos {
         return $videos;
     }
 
-    function retrieve_thumbnail($video_url, $post_id) {
+    public function retrieve_thumbnail($video_url, $post_id) {
 
         $thumbnail_details = $this->retrieve_thumbnail_details($video_url);
 
         if (is_array($thumbnail_details)) {
-            $thumb_id = $this->media_sideload_image($thumbnail_details['url'], $post_id, $thumbnail_details['title']);
+            $thumb_url = media_sideload_image($thumbnail_details['url'], $post_id, $thumbnail_details['title'], 'src');
+            $thumb_id = $this->get_attachment_id_from_src($thumb_url);
             if ($thumbnail_details['width'] > 0 && $thumbnail_details['height'] > 0) {
                 $percent_ratio = 100 / ($thumbnail_details['width'] / $thumbnail_details['height']);
                 add_post_meta($thumb_id, 'wpusavevideos_ratio', $percent_ratio);
@@ -141,7 +165,7 @@ class WPUSaveVideos {
         return false;
     }
 
-    function retrieve_thumbnail_details($video_url) {
+    public function retrieve_thumbnail_details($video_url) {
 
         $url_parsed = parse_url($video_url);
 
@@ -151,103 +175,134 @@ class WPUSaveVideos {
 
         // Extract for youtube
         if (in_array($url_parsed['host'], $this->hosts['youtube'])) {
-            $youtube_id = $this->parse_yturl($video_url);
-            if ($youtube_id !== false) {
-
-                // Weird API
-                $youtube_response = wp_remote_get('http://www.youtube.com/get_video_info?video_id=' . $youtube_id);
-                parse_str(wp_remote_retrieve_body($youtube_response) , $youtube_details);
-                if (is_array($youtube_details) && isset($youtube_details['title'], $youtube_details['iurlhq'])) {
-                    $url_img = $youtube_details['iurlhq'];
-                    if (isset($youtube_details['iurlmaxres'])) {
-                        $url_img = $youtube_details['iurlmaxres'];
-                    }
-
-                    $width = 0;
-                    $height = 0;
-
-                    // Try to retrieve the video dimensions
-                    if (isset($youtube_details['fmt_list'])) {
-                        $fmt_list = explode('/', $youtube_details['fmt_list']);
-                        foreach ($fmt_list as $fmt_info) {
-                            $fmt_info_details = explode('x', $fmt_info);
-                            if (is_array($fmt_info_details) && isset($fmt_info_details[1])) {
-                                $width = $fmt_info_details[0];
-                                $height = $fmt_info_details[1];
-                                break;
-                            }
-                        }
-                    }
-
-                    return array(
-                        'url' => $url_img,
-                        'title' => $youtube_details['title'],
-                        'width' => $width,
-                        'height' => $height
-                    );
-                }
-
-                // Default API
-                return array(
-                    'url' => 'http://img.youtube.com/vi/' . $youtube_id . '/0.jpg',
-                    'title' => $youtube_id,
-                    'width' => 0,
-                    'height' => 0
-                );
+            $tmp_return = $this->get_yt_details($video_url);
+            if (is_array($tmp_return)) {
+                return $tmp_return;
             }
         }
 
         // Extract for vimeo
         if (in_array($url_parsed['host'], $this->hosts['vimeo'])) {
-            $vimeo_id = $this->parse_vimeourl($video_url);
-            $vimeo_details = array();
-            if (is_numeric($vimeo_id)) {
-                $vimeo_response = wp_remote_get("http://vimeo.com/api/v2/video/" . $vimeo_id . ".json");
-                $vimeo_details = json_decode(wp_remote_retrieve_body($vimeo_response));
-            }
-
-            if (isset($vimeo_details[0], $vimeo_details[0]->thumbnail_large)) {
-                return array(
-                    'url' => $vimeo_details[0]->thumbnail_large,
-                    'title' => $vimeo_details[0]->title,
-                    'width' => $vimeo_details[0]->width,
-                    'height' => $vimeo_details[0]->height
-                );
+            $tmp_return = $this->get_vimeo_details($video_url);
+            if (is_array($tmp_return)) {
+                return $tmp_return;
             }
         }
 
         // Extract for dailymotion
         if (in_array($url_parsed['host'], $this->hosts['dailymotion'])) {
-            $daily_id = $this->parse_dailyurl($video_url);
-            $daily_details = array();
-
-            if (!empty($daily_id)) {
-                $daily_response = wp_remote_get("https://api.dailymotion.com/video/" . $daily_id . "?fields=thumbnail_720_url,title,aspect_ratio");
-                $daily_details = json_decode(wp_remote_retrieve_body($daily_response));
-            }
-
-            if (is_object($daily_details) && isset($daily_details->thumbnail_720_url)) {
-
-                $width = 0;
-                $height = 0;
-
-                // Try to retrieve the video dimensions through the aspect ratio
-                if (isset($daily_details->aspect_ratio)) {
-                    $height = 300;
-                    $width = intval(floor($height * $daily_details->aspect_ratio));
-                }
-
-                return array(
-                    'url' => $daily_details->thumbnail_720_url,
-                    'title' => $daily_details->title,
-                    'width' => $width,
-                    'height' => $height
-                );
+            $tmp_return = $this->get_daily_details($video_url);
+            if (is_array($tmp_return)) {
+                return $tmp_return;
             }
         }
 
         return '';
     }
+
+    public function get_yt_details($url) {
+        $youtube_id = $this->parse_yturl($url);
+        if ($youtube_id !== false) {
+
+            // Weird API
+            $youtube_response = wp_remote_get('http://www.youtube.com/get_video_info?video_id=' . $youtube_id);
+            parse_str(wp_remote_retrieve_body($youtube_response), $youtube_details);
+            if (is_array($youtube_details) && isset($youtube_details['title'], $youtube_details['iurlhq'])) {
+                $url_img = $youtube_details['iurlhq'];
+                if (isset($youtube_details['iurlmaxres'])) {
+                    $url_img = $youtube_details['iurlmaxres'];
+                }
+
+                $width = 0;
+                $height = 0;
+
+                // Try to retrieve the video dimensions
+                if (isset($youtube_details['fmt_list'])) {
+                    $fmt_list = explode('/', $youtube_details['fmt_list']);
+                    foreach ($fmt_list as $fmt_info) {
+                        $fmt_info_details = explode('x', $fmt_info);
+                        if (is_array($fmt_info_details) && isset($fmt_info_details[1])) {
+                            $width = $fmt_info_details[0];
+                            $height = $fmt_info_details[1];
+                            break;
+                        }
+                    }
+                }
+
+                return array(
+                    'url' => $url_img,
+                    'title' => $youtube_details['title'],
+                    'width' => $width,
+                    'height' => $height
+                );
+            }
+
+            // Default API
+            return array(
+                'url' => 'http://img.youtube.com/vi/' . $youtube_id . '/0.jpg',
+                'title' => $youtube_id,
+                'width' => 0,
+                'height' => 0
+            );
+        }
+
+        return false;
+    }
+
+    public function get_vimeo_details($url) {
+        $vimeo_id = $this->parse_vimeourl($url);
+        $vimeo_details = array();
+        if (is_numeric($vimeo_id)) {
+            $vimeo_response = wp_remote_get("http://vimeo.com/api/v2/video/" . $vimeo_id . ".json");
+            $vimeo_details = json_decode(wp_remote_retrieve_body($vimeo_response));
+        }
+
+        if (isset($vimeo_details[0], $vimeo_details[0]->thumbnail_large)) {
+            return array(
+                'url' => $vimeo_details[0]->thumbnail_large,
+                'title' => $vimeo_details[0]->title,
+                'width' => $vimeo_details[0]->width,
+                'height' => $vimeo_details[0]->height
+            );
+        }
+
+        return false;
+    }
+
+    public function get_daily_details($url) {
+        $daily_id = $this->parse_dailyurl($url);
+        $daily_details = array();
+
+        if (!empty($daily_id)) {
+            $daily_response = wp_remote_get("https://api.dailymotion.com/video/" . $daily_id . "?fields=thumbnail_720_url,title,aspect_ratio");
+            $daily_details = json_decode(wp_remote_retrieve_body($daily_response));
+        }
+
+        if (is_object($daily_details) && isset($daily_details->thumbnail_720_url)) {
+
+            $width = 0;
+            $height = 0;
+
+            // Try to retrieve the video dimensions through the aspect ratio
+            if (isset($daily_details->aspect_ratio)) {
+                $height = 300;
+                $width = intval(floor($height * $daily_details->aspect_ratio));
+            }
+
+            return array(
+                'url' => $daily_details->thumbnail_720_url,
+                'title' => $daily_details->title,
+                'width' => $width,
+                'height' => $height
+            );
+        }
+
+        return false;
+    }
+
+    /* ----------------------------------------------------------
+      Parse URLs
+    ---------------------------------------------------------- */
 
     /**
      *  Check if input string is a valid YouTube URL
@@ -256,18 +311,18 @@ class WPUSaveVideos {
      *  @param   $url   string   The string that shall be checked.
      *  @return  mixed           Returns YouTube Video ID, or (boolean) false.
      */
-    function parse_yturl($url) {
+    public function parse_yturl($url) {
         $pattern = '#^(?:https?://|//)?(?:www\.|m\.)?(?:youtu\.be/|youtube\.com/(?:embed/|v/|watch\?v=|watch\?.+&v=))([\w-]{11})(?![\w-])#';
         preg_match($pattern, $url, $matches);
         return (isset($matches[1])) ? $matches[1] : false;
     }
 
-    function parse_dailyurl($url) {
+    public function parse_dailyurl($url) {
         $url_parsed = parse_url($url);
-        return strtok(basename($url_parsed['path']) , '_');
+        return strtok(basename($url_parsed['path']), '_');
     }
 
-    function parse_vimeourl($url) {
+    public function parse_vimeourl($url) {
         $url_parsed = parse_url($url);
         $vimeo_url = explode('/', $url_parsed['path']);
         $vimeo_id = false;
@@ -279,51 +334,19 @@ class WPUSaveVideos {
         return $vimeo_id;
     }
 
-    function media_sideload_image($file, $post_id, $desc = '') {
-
-        // Set variables for storage, fix file filename for query strings.
-        preg_match('/[^\?]+\.(jpe?g|jpe|gif|png)\b/i', $file, $matches);
-
-        $tmp = download_url($file);
-        if (is_wp_error($tmp)) {
-            return false;
-        }
-
-        $file_array = array();
-        $file_array['name'] = basename($matches[0]);
-
-        // Download file to temp location.
-        $file_array['tmp_name'] = $tmp;
-
-        // If error storing temporarily, return an error.
-        if (is_wp_error($file_array['tmp_name'])) {
-            return false;
-        }
-
-        // Do the validation and storage stuff.
-        $id = media_handle_sideload($file_array, $post_id, $desc);
-
-        // If error storing permanently, unlink.
-        if (is_wp_error($id)) {
-            @unlink($file_array['tmp_name']);
-        }
-
-        return $id;
-    }
-
     /* ----------------------------------------------------------
       Oembed lite player
     ---------------------------------------------------------- */
 
-    function load_assets() {
-        wp_enqueue_script('wpusavevideo_oembed_script', plugins_url('assets/script.js', __FILE__) , array(
+    public function load_assets() {
+        wp_enqueue_script('wpusavevideo_oembed_script', plugins_url('assets/script.js', __FILE__), array(
             'jquery'
-        ) , $this->plugin_version);
-        wp_register_style('wpusavevideo_oembed_style', plugins_url('assets/style.css', __FILE__) , array() , $this->plugin_version);
+        ), $this->plugin_version);
+        wp_register_style('wpusavevideo_oembed_style', plugins_url('assets/style.css', __FILE__), array(), $this->plugin_version);
         wp_enqueue_style('wpusavevideo_oembed_style');
     }
 
-    function embed_oembed_html($html, $url, $attr, $post_id) {
+    public function embed_oembed_html($html, $url, $attr, $post_id) {
         if (is_admin()) {
             return $html;
         }
@@ -343,13 +366,13 @@ class WPUSaveVideos {
             }
             $parse_url = parse_url($url);
             if (in_array($parse_url['host'], $this->hosts['youtube'])) {
-                $embed_url.= '&autoplay=1';
+                $embed_url .= '&autoplay=1';
             }
             if (in_array($parse_url['host'], $this->hosts['vimeo'])) {
-                $embed_url.= '?autoplay=1';
+                $embed_url .= '?autoplay=1';
             }
             if (in_array($parse_url['host'], $this->hosts['dailymotion'])) {
-                $embed_url.= '?autoplay=1';
+                $embed_url .= '?autoplay=1';
             }
             $style = '';
             $ratio = get_post_meta($video_url['thumbnail'], 'wpusavevideos_ratio', 1);
@@ -365,9 +388,27 @@ class WPUSaveVideos {
         return $html;
     }
 
-    /* Uninstall */
+    /* ----------------------------------------------------------
+      Utilities
+    ---------------------------------------------------------- */
 
-    function uninstall() {
+    /**
+     * Get attachment ID from src
+     * http://wordpress.stackexchange.com/a/227175
+     * @param  string $image_src    url of the image
+     * @return mixed                thumb id
+     */
+    public function get_attachment_id_from_src($image_src) {
+        global $wpdb;
+        $id = $wpdb->get_var($wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE guid='%s'", $image_src));
+        return $id;
+    }
+
+    /* ----------------------------------------------------------
+      Uninstall
+    ---------------------------------------------------------- */
+
+    public function uninstall() {
         delete_post_meta_by_key('wpusavevideos_videos');
     }
 }

@@ -11,3 +11,11 @@ Add this code in your functions.php theme file, or your favorite mu-plugin.
 ```php
 add_filter('wpusavevideos_enable_oembed_player', '__return_true', 10, 1);
 ```
+
+## Set first video image as post thumbnail.
+
+Add this code in your functions.php theme file, or your favorite mu-plugin.
+
+```php
+add_filter('wpusavevideos_set_post_thumbnail', '__return_true', 10, 1);
+```
