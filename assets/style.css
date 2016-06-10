@@ -4,7 +4,12 @@
     z-index: 1;
     position: relative;
     height: 0;
+    margin-bottom: 2em;
     padding-top: 56.25%;
+}
+
+.wpusv-embed-video:last-child {
+    margin-bottom: 0;
 }
 
 .wpusv-embed-video-play,
@@ -26,7 +31,7 @@
 
 .wpusv-embed-video .cover {
     z-index: 3;
-    background: transparent no-repeat center center;
+    background: #000 no-repeat center center;
     background-size: cover;
 }
 
@@ -38,12 +43,18 @@
     border: 0;
     border-radius: 50%;
     text-align: center;
-    font-size: 20px;
-    line-height: 2;
+    font-size: 30px;
+    line-height: 1.8;
     outline: 0;
-    background-color: #fff;
-    box-shadow: 0 0 3px #000;
+    background: rgba(255,255,255,0.8);
+    box-shadow: 0 0 3px rgba(0,0,0,0.5);
+    -webkit-transition: all 0.3s ease;
+    transition: all 0.3s ease;
     cursor: pointer;
+}
+
+.wpusv-embed-video-play:hover {
+    box-shadow: 0 0 20px rgba(0,0,0,0.8);
 }
 
 .wpusv-embed-video-play:before {

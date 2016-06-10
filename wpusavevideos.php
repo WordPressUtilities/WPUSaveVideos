@@ -4,7 +4,7 @@
 Plugin Name: WPU Save Videos
 Plugin URI: http://github.com/Darklg/WPUtilities
 Description: Save Videos thumbnails.
-Version: 0.8
+Version: 0.8.1
 Author: Darklg
 Author URI: http://darklg.me/
 License: MIT License
@@ -13,7 +13,7 @@ License URI: http://opensource.org/licenses/MIT
 
 class WPUSaveVideos {
 
-    private $plugin_version = '0.8';
+    private $plugin_version = '0.8.1';
     private $hosts = array(
         'youtube' => array(
             'youtu.be',
