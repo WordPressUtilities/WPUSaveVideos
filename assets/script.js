@@ -1,5 +1,5 @@
 jQuery(document).ready(function() {
-    jQuery('.wpusv-embed-video-play').on('click', set_wpusavevideos_embed);
+    jQuery('body').on('click', '.wpusv-embed-video-play', set_wpusavevideos_embed);
 });
 
 /* ----------------------------------------------------------
