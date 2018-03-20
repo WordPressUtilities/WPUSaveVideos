@@ -58,9 +58,14 @@
 }
 
 .wpusv-embed-video-play:before {
-    content: "▶";
+    content: "";
+    display: inline-block;
     z-index: 1;
     position: relative;
-    margin-left: 0.15em;
-    vertical-align: middle;
+    height: 0;
+    margin-left: 0.7em;
+    border: 1px solid transparent;
+    border-width: 0.5em 0.8em;
+    border-left-color: currentColor;
+    vertical-align: -0.15em;
 }
