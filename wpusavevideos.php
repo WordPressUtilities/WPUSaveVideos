@@ -4,7 +4,7 @@
 Plugin Name: WPU Save Videos
 Plugin URI: http://github.com/Darklg/WPUtilities
 Description: Save Videos thumbnails.
-Version: 0.10.4
+Version: 0.10.5
 Author: Darklg
 Author URI: http://darklg.me/
 License: MIT License
@@ -13,7 +13,7 @@ License URI: http://opensource.org/licenses/MIT
 
 class WPUSaveVideos {
 
-    private $plugin_version = '0.10.4';
+    private $plugin_version = '0.10.5';
     private $saved_posts = array();
     private $hosts = array(
         'youtube' => array(
@@ -93,10 +93,6 @@ class WPUSaveVideos {
             $new_videos = array_merge($new_videos, $new_videos_tmp);
         }
 
-        require_once ABSPATH . 'wp-admin/includes/media.php';
-        require_once ABSPATH . 'wp-admin/includes/file.php';
-        require_once ABSPATH . 'wp-admin/includes/image.php';
-
         /* Extract video details */
         foreach ($new_videos as $id => $new_video) {
             if (!array_key_exists($id, $videos)) {
@@ -161,6 +157,10 @@ class WPUSaveVideos {
     }
 
     public function retrieve_thumbnail($video_url, $post_id) {
+
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
 
         $thumbnail_details = $this->retrieve_thumbnail_details($video_url);
 
@@ -429,6 +429,7 @@ class WPUSaveVideos {
 
     public function uninstall() {
         delete_post_meta_by_key('wpusavevideos_videos');
+        delete_post_meta_by_key('wpusavevideos_ratio');
     }
 }
 
