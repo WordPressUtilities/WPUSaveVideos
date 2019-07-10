@@ -4,7 +4,7 @@
 Plugin Name: WPU Save Videos
 Plugin URI: http://github.com/Darklg/WPUtilities
 Description: Save Videos thumbnails.
-Version: 0.10.6
+Version: 0.11.0
 Author: Darklg
 Author URI: http://darklg.me/
 License: MIT License
@@ -13,7 +13,7 @@ License URI: http://opensource.org/licenses/MIT
 
 class WPUSaveVideos {
 
-    private $plugin_version = '0.10.6';
+    private $plugin_version = '0.11.0';
     private $saved_posts = array();
     private $hosts = array(
         'youtube' => array(
@@ -434,3 +434,37 @@ class WPUSaveVideos {
 }
 
 $WPUSaveVideos = new WPUSaveVideos();
+
+/* ----------------------------------------------------------
+  Helpers
+---------------------------------------------------------- */
+
+/**
+ * Returns the thumbnail ID for a video
+ * @param  string  $video_url   URL of the video
+ * @param  boolean $post_id     Post where this video is saved
+ * @return mixed                ID of the thumbnail if ok, FALSE if error
+ */
+function wpusavevideos_get_video_thumbnail($video_url, $post_id = false) {
+    if (!$post_id) {
+        $post_id = get_the_ID();
+    }
+    $video_thumbnails = get_post_meta($post_id, 'wpusavevideos_videos', 1);
+    if (!$video_thumbnails) {
+        return false;
+    }
+    $video_thumbnails = unserialize($video_thumbnails);
+    if(!is_array($video_thumbnails)){
+        return false;
+    }
+    $video_thumbnail = false;
+    foreach ($video_thumbnails as $thumbnail) {
+        if ($thumbnail['url'] == $video_url) {
+            $video_thumbnail = $thumbnail['thumbnail'];
+        }
+    }
+    if (!$video_thumbnail) {
+        return false;
+    }
+    return $video_thumbnail;
+}
