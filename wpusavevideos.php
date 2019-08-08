@@ -4,7 +4,7 @@
 Plugin Name: WPU Save Videos
 Plugin URI: http://github.com/Darklg/WPUtilities
 Description: Save Videos thumbnails.
-Version: 0.11.0
+Version: 0.12.0
 Author: Darklg
 Author URI: http://darklg.me/
 License: MIT License
@@ -13,7 +13,7 @@ License URI: http://opensource.org/licenses/MIT
 
 class WPUSaveVideos {
 
-    private $plugin_version = '0.11.0';
+    private $plugin_version = '0.12.0';
     private $saved_posts = array();
     private $hosts = array(
         'youtube' => array(
@@ -41,6 +41,9 @@ class WPUSaveVideos {
         add_action('save_post', array(&$this,
             'save_post'
         ), 10, 3);
+        add_action('plugins_loaded', array(&$this,
+            'plugins_loaded'
+        ));
         if (apply_filters('wpusavevideos_enable_oembed_player', false)) {
             add_action('wp_enqueue_scripts', array(&$this,
                 'load_assets'
@@ -49,6 +52,16 @@ class WPUSaveVideos {
                 'embed_oembed_html'
             ), 99, 4);
         }
+    }
+
+    public function plugins_loaded() {
+
+        /* Updater */
+        include dirname(__FILE__) . '/inc/WPUBaseUpdate/WPUBaseUpdate.php';
+        $this->settings_update = new \wpusavevideos\WPUBaseUpdate(
+            'WordPressUtilities',
+            'wpusavevideos',
+            $this->plugin_version);
     }
 
     public function save_post($post_id, $post) {
@@ -79,8 +92,11 @@ class WPUSaveVideos {
         $this->saved_posts[] = $post_id;
 
         /* Get current video list */
-        $videos = unserialize(get_post_meta($post_id, 'wpusavevideos_videos', 1));
+        $videos = get_post_meta($post_id, 'wpusavevideos_videos', 1);
 
+        if (!is_array($videos)) {
+            $videos = unserialize($videos);
+        }
         if (!is_array($videos)) {
             $videos = array();
         }
@@ -106,7 +122,7 @@ class WPUSaveVideos {
         /* Remove inexistant videos */
         $saved_videos = array();
         foreach ($videos as $id => $video) {
-            if (array_key_exists($id, $new_videos)) {
+            if (array_key_exists($id, $new_videos) || (isset($video['forced_url']) && $video['forced_url'])) {
                 $saved_videos[$id] = $video;
             }
         }
@@ -122,7 +138,7 @@ class WPUSaveVideos {
         }
 
         /* Save video list */
-        update_post_meta($post_id, 'wpusavevideos_videos', serialize($saved_videos));
+        update_post_meta($post_id, 'wpusavevideos_videos', $saved_videos);
     }
 
     public function extract_videos_from_text($text) {
@@ -369,7 +385,10 @@ class WPUSaveVideos {
         if (is_admin()) {
             return $html;
         }
-        $wpusavevideos_videos = unserialize(get_post_meta($post_id, 'wpusavevideos_videos', 1));
+        $wpusavevideos_videos = get_post_meta($post_id, 'wpusavevideos_videos', 1);
+        if (!is_array($wpusavevideos_videos)) {
+            $wpusavevideos_videos = unserialize($wpusavevideos_videos);
+        }
         foreach ($wpusavevideos_videos as $video_url) {
             if ($video_url['url'] != $url) {
                 continue;
@@ -419,7 +438,7 @@ class WPUSaveVideos {
      */
     public function get_attachment_id_from_src($image_src) {
         global $wpdb;
-        $id = $wpdb->get_var($wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE guid='%s'", $image_src));
+        $id = $wpdb->get_var($wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE guid=%s", $image_src));
         return $id;
     }
 
@@ -441,11 +460,13 @@ $WPUSaveVideos = new WPUSaveVideos();
 
 /**
  * Returns the thumbnail ID for a video
- * @param  string  $video_url   URL of the video
- * @param  boolean $post_id     Post where this video is saved
- * @return mixed                ID of the thumbnail if ok, FALSE if error
+ * @param  string  $video_url        URL of the video
+ * @param  boolean $post_id          Post where this video is saved
+ * @param  boolean $force_download   Force URL download if not in post images
+ * @return mixed                     ID of the thumbnail if ok, FALSE if error
  */
-function wpusavevideos_get_video_thumbnail($video_url, $post_id = false) {
+function wpusavevideos_get_video_thumbnail($video_url, $post_id = false, $force_download = false) {
+
     if (!$post_id) {
         $post_id = get_the_ID();
     }
@@ -453,9 +474,11 @@ function wpusavevideos_get_video_thumbnail($video_url, $post_id = false) {
     if (!$video_thumbnails) {
         return false;
     }
-    $video_thumbnails = unserialize($video_thumbnails);
-    if(!is_array($video_thumbnails)){
-        return false;
+    if (!is_array($video_thumbnails)) {
+        $video_thumbnails = unserialize($video_thumbnails);
+    }
+    if (!is_array($video_thumbnails)) {
+        $video_thumbnails = array();
     }
     $video_thumbnail = false;
     foreach ($video_thumbnails as $thumbnail) {
@@ -464,7 +487,26 @@ function wpusavevideos_get_video_thumbnail($video_url, $post_id = false) {
         }
     }
     if (!$video_thumbnail) {
-        return false;
+        if (!$force_download) {
+            return false;
+        }
+
+        /* Forcing download */
+        global $WPUSaveVideos;
+        $video_thumbnail = $WPUSaveVideos->retrieve_thumbnail($video_url, $post_id);
+        if (!is_numeric($video_thumbnail)) {
+            error_log('Thumbnail could not be saved');
+            return false;
+        }
+
+        /* Saving thumbnail ID */
+        $video_thumbnails[md5($video_url)] = array(
+            'url' => $video_url,
+            'thumbnail' => $video_thumbnail,
+            'forced_url' => 1
+        );
+        update_post_meta($post_id, 'wpusavevideos_videos', $video_thumbnails);
+
     }
     return $video_thumbnail;
 }
