@@ -4,7 +4,7 @@
 Plugin Name: WPU Save Videos
 Plugin URI: http://github.com/Darklg/WPUtilities
 Description: Save Videos thumbnails.
-Version: 0.12.0
+Version: 0.12.1
 Author: Darklg
 Author URI: http://darklg.me/
 License: MIT License
@@ -13,7 +13,7 @@ License URI: http://opensource.org/licenses/MIT
 
 class WPUSaveVideos {
 
-    private $plugin_version = '0.12.0';
+    private $plugin_version = '0.12.1';
     private $saved_posts = array();
     private $hosts = array(
         'youtube' => array(
@@ -185,9 +185,12 @@ class WPUSaveVideos {
             if (is_object($thumb_url) && isset($thumbnail_details['urlalt'])) {
                 $thumb_url = media_sideload_image($thumbnail_details['urlalt'], $post_id, $thumbnail_details['title'], 'src');
             }
+            if (is_object($thumb_url)) {
+                return false;
+            }
             $thumb_id = $this->get_attachment_id_from_src($thumb_url);
             if ($thumbnail_details['width'] > 0 && $thumbnail_details['height'] > 0) {
-                $percent_ratio = 100 / ($thumbnail_details['width'] / $thumbnail_details['height']);
+                $percent_ratio = 100 / (intval($thumbnail_details['width']) / intval($thumbnail_details['height']));
                 add_post_meta($thumb_id, 'wpusavevideos_ratio', $percent_ratio);
             }
             return $thumb_id;
@@ -471,7 +474,7 @@ function wpusavevideos_get_video_thumbnail($video_url, $post_id = false, $force_
         $post_id = get_the_ID();
     }
     $video_thumbnails = get_post_meta($post_id, 'wpusavevideos_videos', 1);
-    if (!$video_thumbnails) {
+    if (!$video_thumbnails && !$force_download) {
         return false;
     }
     if (!is_array($video_thumbnails)) {
